@@ -14,6 +14,7 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { APP_DISPLAY_NAME, APP_VERSION } from "../branding";
+import { WritingSessionProvider } from "../writing/WritingSession";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
 import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
@@ -200,12 +201,18 @@ function RootRouteBranch() {
     </>
   );
   const appShell = (
-    <CommandPalette>
-      {/* Setup starts with an empty workspace, so the Welcome page has no thread list. */}
-      <AppSidebarLayout showSidebar={!isWelcome}>
-        <Outlet />
-      </AppSidebarLayout>
-    </CommandPalette>
+    <WritingSessionProvider>
+      <CommandPalette>
+        {/* Setup starts with an empty workspace, so the Welcome page has no thread list. */}
+        {pathname === "/write" ? (
+          <Outlet />
+        ) : (
+          <AppSidebarLayout showSidebar={!isWelcome}>
+            <Outlet />
+          </AppSidebarLayout>
+        )}
+      </CommandPalette>
+    </WritingSessionProvider>
   );
 
   return (
@@ -218,12 +225,20 @@ function RootRouteBranch() {
         </>
       ) : (
         <FirstRunGate
-          enabled={primaryEnvironmentAuthenticated}
+          enabled={
+            primaryEnvironmentAuthenticated &&
+            pathname !== "/write" &&
+            !pathname.startsWith("/settings")
+          }
           hostedStatic={authGateState.status === "hosted-static"}
         >
           {appHosts}
           {primaryEnvironmentAuthenticated ? (
-            <EventRouter skipInitialBootstrapNavigation={returningFromWelcome} />
+            <EventRouter
+              skipInitialBootstrapNavigation={
+                returningFromWelcome || pathname === "/" || pathname === "/write"
+              }
+            />
           ) : null}
           {appShell}
         </FirstRunGate>

@@ -1,0 +1,15 @@
+name: Feature or idea
+description: Suggest something that would help you write, think, or design.
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: Tell us what you are trying to do and what would make it easier.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Possible approach
+      description: Optional. Sketch a behavior, design, or implementation.
