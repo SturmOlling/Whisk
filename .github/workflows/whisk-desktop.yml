@@ -6,7 +6,6 @@ on:
   workflow_dispatch:
   push:
     tags: ["whisk-v*"]
-    branches: [feat/whisk-desktop]
 
 permissions:
   contents: read
