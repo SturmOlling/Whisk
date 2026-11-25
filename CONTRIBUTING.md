@@ -15,6 +15,9 @@ while honoring Whisk's explicit direction and contribution policy.
 3. Run `vp run dev --home-dir .t3 --no-seed` and open its private pairing URL.
 4. Visit `/write` for the writing workspace.
 
+To build the desktop app, see [Desktop app](README.md#desktop-app). Its identity is
+in `packages/shared/src/appIdentity.ts`.
+
 Keep development state inside `.t3`. Never test against a live T3 Code database.
 To keep upstream available, add `git remote add upstream https://github.com/pingdotgg/t3code.git`.
 

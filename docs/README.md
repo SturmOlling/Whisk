@@ -1,5 +1,8 @@
 # T3 Code docs
 
+> Whisk inherits these pages from T3 Code, and most describe T3 Code rather than
+> Whisk. Start with the [Whisk README](../README.md).
+
 ## Using T3 Code
 
 - [Install T3 Code](./user/install.md)

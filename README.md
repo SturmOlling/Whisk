@@ -11,6 +11,8 @@ write, think through context, and design how their words reach an audience.
 - A blank writing page. Controls fade only in Sparse, and stay visible while
   you read or use a feature area.
 - Resizable projects/files on the left; Context, Todos, and Designer on the right.
+  In Review, Notes replaces Designer: select a highlight to see its note, or a note
+  to find its passage.
 - Folder-based projects with readable Markdown files and metadata beside them.
   Existing browser-only projects can be moved using **Save to folder**.
 - **Sparse**, **Designed**, and **Review** views, with a separate shadow-outline toggle.
@@ -41,11 +43,14 @@ save. Whisk refuses to overwrite a changed file; **Reload folder, keep recovery
 copy** opens the disk version and keeps your unsaved work in a separate project.
 Export your workspace for an additional backup. JSON backup imports detach folder
 bindings so restoring a backup cannot silently overwrite existing files.
-Native mobile still
-has T3 Code's agent interface. In Agent settings, use **Apply design directions** to turn free-text directions into layout,
-typography, and color choices through your agent. The manual design controls
-update the Designed preview immediately. Upstream desktop/mobile downloads install T3 Code,
-not Whisk. Whisk has no published releases yet; see [Desktop app](#desktop-app).
+
+In Agent settings, use **Apply design directions** to turn free-text directions
+into layout, typography, and color choices through your agent. The manual design
+controls update the Designed preview immediately.
+
+Whisk has no published releases yet. T3 Code's desktop and mobile downloads install
+T3 Code, not Whisk. You can [build the desktop app](#desktop-app) yourself. There is
+no mobile writing app; the mobile client in this repository is T3 Code's agent interface.
 
 ## Run from source
 
@@ -60,16 +65,18 @@ vp run dev --home-dir .t3 --no-seed
 ```
 
 Open the pairing URL printed by the dev runner. Do not publish that URL or token.
-The explicit home directory keeps development data inside this checkout.
+The explicit home directory keeps development data inside this checkout. On a Mac,
+you can double-click `Start Whisk.command` instead.
 
 The inherited [development runbook](docs/operations/development.md) and
 [architecture overview](docs/internals/overview.md) explain the underlying T3
-Code system. Some inherited documentation still describes upstream T3 Code.
+Code system. Pages under `docs/` are inherited and mostly describe upstream T3 Code.
 
 ## Desktop app
 
 Whisk can also run as its own desktop app. It uses a separate name, data folder
-(`~/.whisk-app`), and `whisk://` links, so it can sit beside T3 Code. Build it with:
+(`~/.whisk-app`), and `whisk://` links, so it can sit beside T3 Code. Install the
+[build prerequisites](docs/operations/development.md#desktop-artifacts), then run:
 
 ```sh
 vp run dist:desktop:dmg:arm64   # Mac with Apple silicon
@@ -77,12 +84,22 @@ vp run dist:desktop:dmg:x64     # Mac with Intel
 vp run dist:desktop:linux       # Linux
 ```
 
-The result is in `release/`. The **Whisk desktop** GitHub workflow builds the same
-files. Builds are unsigned and do not update themselves. On a Mac, the first time
-you open a downloaded build, allow it under System Settings → Privacy & Security.
+The result is in `release/`. Maintainers can also run the **Whisk desktop** workflow
+on GitHub; a `whisk-v*` tag makes a draft release. Builds are unsigned and do not
+update themselves. On a Mac, the first time you open a downloaded build, allow it
+under System Settings → Privacy & Security.
+
+The Intel Mac build is the one in use. The Linux build is not yet tested, the Apple
+silicon build has not been built, and Windows is not set up.
 
 The desktop app does not see drafts kept in your web browser. Use **Back up
 workspace** in the browser, then **Import workspace…** in the app.
+
+## Privacy
+
+Whisk keeps your writing in your folders and browser. When you ask an agent for
+help, it receives the text that request needs. Product usage data, which goes to
+T3 Code, is off unless you turn it on with `T3CODE_TELEMETRY_ENABLED=true`.
 
 ## Contribute
 
