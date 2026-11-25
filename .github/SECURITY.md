@@ -1,12 +1,11 @@
 # Security policy
 
-Whisk is an independent fork of T3 Code and has no private reporting address yet.
+Whisk is an independent fork of T3 Code.
 
-To report a vulnerability in Whisk, open an
-[issue](https://github.com/SturmOlling/Whisk/issues) that says only that you have a
-security report and how to reach you. Leave out the details; a maintainer will
-arrange a private conversation. Please do not disclose them publicly until we have
-had a reasonable opportunity to fix the problem.
+Report a vulnerability in Whisk privately through
+[GitHub](https://github.com/SturmOlling/Whisk/security/advisories/new). Please do not
+open a public issue or disclose the problem until we have had a reasonable
+opportunity to fix it.
 
 If the problem also affects [T3 Code](https://github.com/pingdotgg/t3code) or T3
 Tools-operated services, report it to T3 Code under its
