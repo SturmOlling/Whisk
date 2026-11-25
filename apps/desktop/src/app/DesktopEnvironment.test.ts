@@ -13,9 +13,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/T3 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Whisk.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/T3 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Whisk.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -66,10 +66,38 @@ describe("DesktopEnvironment", () => {
         {},
         { VITE_DEV_SERVER_URL: "http://localhost:5173" },
       );
-      const production = yield* makeEnvironment();
+      const production = yield* makeEnvironment(
+        { isPackaged: true },
+        { T3CODE_HOME: "/upstream/home" },
+      );
 
-      assert.equal(development.stateDir, "/Users/alice/.t3/dev");
-      assert.equal(production.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(development.stateDir, "/Users/alice/.whisk-app/dev");
+      assert.equal(production.stateDir, "/Users/alice/.whisk-app/userdata");
+      assert.equal(development.displayName, "Whisk (Dev)");
+      assert.equal(production.displayName, "Whisk");
+      assert.equal(development.appUserModelId, "io.github.sturmolling.whisk.dev");
+      assert.equal(production.appUserModelId, "io.github.sturmolling.whisk");
+      assert.equal(
+        development.linuxDesktopEntryName,
+        "io.github.sturmolling.whisk.Development.desktop",
+      );
+      assert.equal(production.linuxDesktopEntryName, "io.github.sturmolling.whisk.desktop");
+    }),
+  );
+
+  it.effect("uses WHISK_HOME for packaged apps and T3CODE_HOME for Vite development", () =>
+    Effect.gen(function* () {
+      const homes = { WHISK_HOME: "/whisk/home", T3CODE_HOME: "/development/home" };
+      const production = yield* makeEnvironment({ isPackaged: true }, homes);
+      const development = yield* makeEnvironment(
+        {},
+        { ...homes, VITE_DEV_SERVER_URL: "http://localhost:5173" },
+      );
+
+      assert.equal(production.baseDir, "/whisk/home");
+      assert.equal(production.stateDir, "/whisk/home/userdata");
+      assert.equal(development.baseDir, "/development/home");
+      assert.equal(development.stateDir, "/development/home/userdata");
     }),
   );
 });

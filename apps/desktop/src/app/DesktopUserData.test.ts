@@ -7,39 +7,37 @@ import * as PlatformError from "effect/PlatformError";
 
 import { clearStaleGpuCaches, resolveUserDataPath } from "./DesktopUserData.ts";
 
-it.effect.each(["t3code", "T3 Code (Alpha)"])(
-  "preserves Windows credential keys from %s without copying browser databases",
-  (sourceName) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-profile-" });
-      const source = path.join(directory, sourceName);
-      const destination = path.join(directory, "t3code-v2");
-      const state = '{"os_crypt":{"encrypted_key":"test-encrypted-key"}}';
-      yield* fs.makeDirectory(path.join(directory, "T3 Code (Alpha)"), { recursive: true });
-      yield* fs.makeDirectory(path.join(source, "IndexedDB"), { recursive: true });
-      yield* fs.writeFileString(path.join(source, "Local State"), state);
-      yield* fs.writeFileString(path.join(source, "IndexedDB", "LOCK"), "V1 owns this database");
-      yield* resolveUserDataPath({
-        appDataDirectory: directory,
-        isDevelopment: false,
-        platform: "win32",
+it.effect("ignores existing T3 Code profiles when resolving Whisk user data", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const appDataDirectory = yield* fs.makeTempDirectoryScoped({ prefix: "whisk-profile-" });
+    const oldProfiles = ["T3 Code (Alpha)", "t3code", "t3code-v2", "T3 Code (Dev)", "t3code-dev"];
+    for (const name of oldProfiles) {
+      const profile = path.join(appDataDirectory, name);
+      yield* fs.makeDirectory(profile);
+      yield* fs.writeFileString(path.join(profile, "Local State"), name);
+    }
+
+    for (const [isDevelopment, directory] of [
+      [false, "whisk-desktop"],
+      [true, "whisk-desktop-dev"],
+    ] as const) {
+      const resolve: Effect.Effect<string, never, Path.Path> = resolveUserDataPath({
+        appDataDirectory,
+        isDevelopment,
       });
-      assert.equal(yield* fs.readFileString(path.join(destination, "Local State")), state);
-      assert.equal(yield* fs.readFileString(path.join(source, "Local State")), state);
-      assert.isFalse(yield* fs.exists(path.join(destination, "IndexedDB")));
-      yield* fs.writeFileString(path.join(destination, "Local State"), "existing V2 state");
-      yield* resolveUserDataPath({
-        appDataDirectory: directory,
-        isDevelopment: false,
-        platform: "win32",
-      });
+      const userData = yield* resolve;
+      assert.equal(userData, path.join(appDataDirectory, directory));
+      assert.isFalse(yield* fs.exists(userData));
+    }
+    for (const name of oldProfiles) {
       assert.equal(
-        yield* fs.readFileString(path.join(destination, "Local State")),
-        "existing V2 state",
+        yield* fs.readFileString(path.join(appDataDirectory, name, "Local State")),
+        name,
       );
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    }
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
 const gpuCacheDirectories = [
@@ -98,7 +96,7 @@ it.effect("keeps GPU caches built on the first launch of a fresh install", () =>
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const appData = yield* fs.makeTempDirectoryScoped({ prefix: "t3-v2-fresh-" });
-    const userDataPath = path.join(appData, "t3code-v2");
+    const userDataPath = path.join(appData, "whisk-desktop");
 
     yield* clearStaleGpuCaches({ userDataPath, electronVersion: "44.10.1" });
     yield* fs.makeDirectory(path.join(userDataPath, "GPUCache"));

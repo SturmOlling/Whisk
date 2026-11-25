@@ -23,10 +23,7 @@ const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPa
 export class DesktopAppIdentity extends Context.Service<
   DesktopAppIdentity,
   {
-    readonly resolveUserDataPath: Effect.Effect<
-      string,
-      DesktopUserData.DesktopUserDataInitializationError
-    >;
+    readonly resolveUserDataPath: Effect.Effect<string>;
     readonly configure: Effect.Effect<void>;
   }
 >()("@t3tools/desktop/app/DesktopAppIdentity") {}
@@ -93,7 +90,9 @@ export const make = Effect.gen(function* () {
     const commitHash = yield* resolveAboutCommitHash;
     // Electron strips spaces but keeps parentheses in its User-Agent token, breaking Turnstile in preview sessions.
     yield* electronApp.setName(
-      `${environment.branding.baseName} ${environment.branding.stageLabel}`,
+      environment.isDevelopment
+        ? `${environment.branding.baseName} ${environment.branding.stageLabel}`
+        : environment.branding.baseName,
     );
     yield* electronApp.setAboutPanelOptions({
       applicationName: environment.displayName,

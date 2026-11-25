@@ -140,6 +140,14 @@ Use existing UI and state patterns where they fit. New writing controls begin in
 English; preserve upstream translations and keep future localization possible.
 Support narrow screens, keyboard navigation, visible focus, and reduced motion.
 
+### Desktop identity
+
+The packaged app must be able to run beside T3 Code. Its name, app id, `whisk://`
+scheme, `~/.whisk-app` home, and `whisk-desktop` profile come from
+`packages/shared/src/appIdentity.ts`; keep upstream merges from restoring T3's.
+It never reads or migrates T3 profiles, installs the `t3` command at launch, or
+registers web links. Upstream telemetry stays off by default.
+
 ## Development and verification
 
 Install Vite+ using the upstream [development runbook](docs/operations/development.md).

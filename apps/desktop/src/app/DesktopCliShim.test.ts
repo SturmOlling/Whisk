@@ -197,6 +197,7 @@ describe("renderCliShim", () => {
       t3Home: "C:\\Users\\José\\.t3",
     });
     const lines = script.split("\r\n");
+    expect(lines).toContain("rem Written by Whisk: runs the desktop app's bundled t3 CLI.");
     expect(lines).toContain("setlocal EnableExtensions DisableDelayedExpansion");
     expect(lines).toContain("chcp 65001 >nul");
     expect(lines).toContain(

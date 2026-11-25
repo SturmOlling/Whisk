@@ -750,7 +750,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
           origin: "https://box.tail1234.ts.net",
           "x-forwarded-host": "box.tail1234.ts.net",
         });
-        yield* upgrade({ origin: "t3code://app" });
+        yield* upgrade({ origin: "whisk://app" });
+        yield* upgrade({ origin: "whisk-dev://app" });
         yield* upgrade({ origin: "http://localhost:5733" });
         yield* upgrade({});
 

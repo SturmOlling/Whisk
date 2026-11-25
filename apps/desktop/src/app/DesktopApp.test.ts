@@ -201,7 +201,9 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
           Layer.mock(BrowserImport.BrowserImport, {}),
           Layer.mock(ChildProcessSpawner.ChildProcessSpawner, {}),
           Layer.mock(DesktopBackendConfiguration.DesktopBackendConfiguration, {}),
-          Layer.mock(DesktopCliCommand.DesktopCliCommand, {}),
+          Layer.mock(DesktopCliCommand.DesktopCliCommand, {
+            installOnFirstLaunch: stub.record("install-cli"),
+          }),
           Layer.mock(DesktopClientSettings.DesktopClientSettings, {}),
           Layer.mock(DesktopConnectionCatalogStore.DesktopConnectionCatalogStore, {}),
           Layer.mock(DesktopIpc.DesktopIpc, {}),
@@ -318,6 +320,7 @@ it.effect.each([false, true])(
       yield* Deferred.succeed(releaseHistory, undefined);
       const result = yield* Fiber.await(app);
       assert.equal(Exit.isFailure(result), stopDefect);
+      assert.notInclude(events, "install-cli");
       assert.isTrue(yield* shutdown.isComplete);
       assert.isTrue(yield* Deferred.isDone(registrationStopped));
     }).pipe(Effect.provide(DesktopShutdown.layer)),
@@ -333,13 +336,13 @@ it.effect("points a stale t3 launcher at the updated AppImage with Local environ
       baseDir,
       platform: "linux",
     } as DesktopEnvironment.DesktopEnvironment["Service"]);
-    const removedAppImage = path.join(baseDir, "T3-Code-0.1.6-x86_64.AppImage");
-    const updatedAppImage = path.join(baseDir, "T3-Code-0.1.7-x86_64.AppImage");
+    const removedAppImage = path.join(baseDir, "Whisk-0.1.6-x86_64.AppImage");
+    const updatedAppImage = path.join(baseDir, "Whisk-0.1.7-x86_64.AppImage");
     yield* fs.makeDirectory(path.dirname(launcher), { recursive: true });
     yield* fs.writeFileString(
       launcher,
       DesktopCliShim.renderCliShim({
-        target: { kind: "appimage", appImage: removedAppImage, executableName: "t3code" },
+        target: { kind: "appimage", appImage: removedAppImage, executableName: "whisk" },
         shimPath: launcher,
         t3Home: baseDir,
       }),

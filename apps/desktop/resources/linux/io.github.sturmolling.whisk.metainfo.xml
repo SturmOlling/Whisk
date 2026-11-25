@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.sturmolling.whisk</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Whisk</name>
+  <summary>A writing workspace with agent assistance</summary>
+  <developer id="io.github.sturmolling">
+    <name>Whisk contributors</name>
+  </developer>
+  <description>
+    <p>
+      Whisk is an open-source writing workspace with coding-agent assistance.
+      It is built on T3 Code.
+    </p>
+  </description>
+  <launchable type="desktop-id">whisk.desktop</launchable>
+  <icon type="stock">whisk</icon>
+  <provides>
+    <binary>whisk</binary>
+  </provides>
+  <categories>
+    <category>Office</category>
+  </categories>
+  <url type="homepage">https://github.com/SturmOlling/Whisk</url>
+  <url type="bugtracker">https://github.com/SturmOlling/Whisk/issues</url>
+  <url type="vcs-browser">https://github.com/SturmOlling/Whisk</url>
+</component>

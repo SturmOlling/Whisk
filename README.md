@@ -45,7 +45,7 @@ Native mobile still
 has T3 Code's agent interface. In Agent settings, use **Apply design directions** to turn free-text directions into layout,
 typography, and color choices through your agent. The manual design controls
 update the Designed preview immediately. Upstream desktop/mobile downloads install T3 Code,
-not Whisk; Whisk does not yet publish packaged releases.
+not Whisk. Whisk has no published releases yet; see [Desktop app](#desktop-app).
 
 ## Run from source
 
@@ -65,6 +65,24 @@ The explicit home directory keeps development data inside this checkout.
 The inherited [development runbook](docs/operations/development.md) and
 [architecture overview](docs/internals/overview.md) explain the underlying T3
 Code system. Some inherited documentation still describes upstream T3 Code.
+
+## Desktop app
+
+Whisk can also run as its own desktop app. It uses a separate name, data folder
+(`~/.whisk-app`), and `whisk://` links, so it can sit beside T3 Code. Build it with:
+
+```sh
+vp run dist:desktop:dmg:arm64   # Mac with Apple silicon
+vp run dist:desktop:dmg:x64     # Mac with Intel
+vp run dist:desktop:linux       # Linux
+```
+
+The result is in `release/`. The **Whisk desktop** GitHub workflow builds the same
+files. Builds are unsigned and do not update themselves. On a Mac, the first time
+you open a downloaded build, allow it under System Settings → Privacy & Security.
+
+The desktop app does not see drafts kept in your web browser. Use **Back up
+workspace** in the browser, then **Import workspace…** in the app.
 
 ## Contribute
 

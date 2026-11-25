@@ -31,6 +31,15 @@ const input = {
 const callbackUrl = `http://127.0.0.1:54213/auth/callback?state=${"a".repeat(43)}&code=one-time-code&client_id=oaiapp_test`;
 
 describe("Codex desktop handoff", () => {
+  it.each([
+    { development: false, protocol: "whisk:" },
+    { development: true, protocol: "whisk-dev:" },
+  ])("uses $protocol for the desktop handoff", ({ development, protocol }) => {
+    const link = codexAuthHandoffUrl(input, development);
+    expect(new URL(link).protocol).toBe(protocol);
+    expect(readCodexAuthHandoff(link, development)).toEqual(input);
+  });
+
   it("keeps the hosted return route, account, and environment with the code in a fragment", () => {
     expect(readCodexAuthHandoff(codexAuthHandoffUrl(input), false)).toEqual(input);
     const delivery = codexAuthDeliveryUrl(input, callbackUrl);
@@ -47,6 +56,7 @@ describe("Codex desktop handoff", () => {
   it("rejects other handlers, schemes, arbitrary return sites, and non-OpenAI authorization", () => {
     const link = codexAuthHandoffUrl(input);
     expect(readCodexAuthHandoff(link, true)).toBeUndefined();
+    expect(readCodexAuthHandoff(link.replace("whisk:", "t3code:"), false)).toBeUndefined();
     expect(readCodexAuthHandoff(link.replace("auth/codex", "auth/other"), false)).toBeUndefined();
     expect(
       readCodexAuthHandoff(

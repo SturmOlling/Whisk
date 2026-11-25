@@ -37,6 +37,19 @@ export const BRAND_ASSET_PATHS = {
   developmentWebIcon512Png: "assets/dev/blueprint-web-icon-512x512.png",
 } as const;
 
+// Upstream's exporter owns the paths above. Whisk builds ship these instead.
+export const WHISK_ASSET_PATHS = {
+  macIconPng: "assets/whisk/icon-macos-1024.png",
+  linuxIconPng: "assets/whisk/icon-1024.png",
+  windowsIconIco: "assets/whisk/icon.ico",
+  webFaviconIco: "assets/whisk/favicon.ico",
+  webFavicon16Png: "assets/whisk/favicon-16x16.png",
+  webFavicon32Png: "assets/whisk/favicon-32x32.png",
+  webAppleTouchIconPng: "assets/whisk/apple-touch-icon.png",
+  webIcon192Png: "assets/whisk/icon-192x192.png",
+  webIcon512Png: "assets/whisk/icon-512x512.png",
+} as const;
+
 export type WebAssetBrand = "development" | "nightly" | "production";
 
 export const WEB_ASSET_CHANNELS = ["latest", "nightly"] as const;
@@ -71,20 +84,20 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     icon512Png: BRAND_ASSET_PATHS.developmentWebIcon512Png,
   },
   nightly: {
-    faviconIco: BRAND_ASSET_PATHS.nightlyWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.nightlyWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.nightlyWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.nightlyWebAppleTouchIconPng,
-    icon192Png: BRAND_ASSET_PATHS.nightlyWebIcon192Png,
-    icon512Png: BRAND_ASSET_PATHS.nightlyWebIcon512Png,
+    faviconIco: WHISK_ASSET_PATHS.webFaviconIco,
+    favicon16Png: WHISK_ASSET_PATHS.webFavicon16Png,
+    favicon32Png: WHISK_ASSET_PATHS.webFavicon32Png,
+    appleTouchIconPng: WHISK_ASSET_PATHS.webAppleTouchIconPng,
+    icon192Png: WHISK_ASSET_PATHS.webIcon192Png,
+    icon512Png: WHISK_ASSET_PATHS.webIcon512Png,
   },
   production: {
-    faviconIco: BRAND_ASSET_PATHS.productionWebFaviconIco,
-    favicon16Png: BRAND_ASSET_PATHS.productionWebFavicon16Png,
-    favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
-    appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
-    icon192Png: BRAND_ASSET_PATHS.productionWebIcon192Png,
-    icon512Png: BRAND_ASSET_PATHS.productionWebIcon512Png,
+    faviconIco: WHISK_ASSET_PATHS.webFaviconIco,
+    favicon16Png: WHISK_ASSET_PATHS.webFavicon16Png,
+    favicon32Png: WHISK_ASSET_PATHS.webFavicon32Png,
+    appleTouchIconPng: WHISK_ASSET_PATHS.webAppleTouchIconPng,
+    icon192Png: WHISK_ASSET_PATHS.webIcon192Png,
+    icon512Png: WHISK_ASSET_PATHS.webIcon512Png,
   },
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
 

@@ -113,7 +113,11 @@ const recordTwentyEvents = Effect.gen(function* () {
   }
 });
 
-const analyticsLayerWith = (client: HttpClient.HttpClient, policy?: ManagedPolicyDocument) =>
+const analyticsLayerWith = (
+  client: HttpClient.HttpClient,
+  policy?: ManagedPolicyDocument,
+  env: { readonly T3CODE_TELEMETRY_ENABLED?: boolean } = { T3CODE_TELEMETRY_ENABLED: true },
+) =>
   AnalyticsService.layer.pipe(
     Layer.provideMerge(
       ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "t3-telemetry-retry-" }),
@@ -121,7 +125,7 @@ const analyticsLayerWith = (client: HttpClient.HttpClient, policy?: ManagedPolic
     Layer.provide(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          T3CODE_TELEMETRY_ENABLED: true,
+          ...env,
           T3CODE_POSTHOG_KEY: "phc_test_key",
           T3CODE_POSTHOG_HOST: "http://localhost",
         }),
@@ -187,8 +191,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
           const analytics = yield* AnalyticsService.AnalyticsService;
           yield* analytics.record("test.before-discovery");
           yield* analytics.flush;
-          env.T3CODE_TELEMETRY_ENABLED = "false";
           delete env.T3CODE_DESKTOP_SHELL_DISCOVERY_PENDING;
+          yield* analytics.record("test.no-consent");
+          yield* analytics.flush;
+          env.T3CODE_TELEMETRY_ENABLED = "false";
           yield* analytics.record("test.opted-out");
           yield* analytics.flush;
           env.T3CODE_TELEMETRY_ENABLED = "true";
@@ -392,6 +398,28 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
         ),
         true,
       );
+    }),
+  );
+
+  it.effect("keeps telemetry off when T3CODE_TELEMETRY_ENABLED is absent", () =>
+    Effect.gen(function* () {
+      const requests: Array<HttpClientRequest.HttpClientRequest> = [];
+      const client = HttpClient.make((request) =>
+        Effect.sync(() => {
+          requests.push(request);
+          return HttpClientResponse.fromWeb(request, new Response(null, { status: 204 }));
+        }),
+      );
+      yield* Effect.gen(function* () {
+        yield* recordTwentyEvents;
+        const analytics = yield* AnalyticsService.AnalyticsService;
+        yield* analytics.flush;
+      }).pipe(
+        Effect.provide(analyticsLayerWith(client, undefined, {})),
+        Effect.provideService(HostProcess.Environment, {}),
+      );
+
+      assert.deepEqual(requests, []);
     }),
   );
 
