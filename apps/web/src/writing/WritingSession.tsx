@@ -1,9 +1,14 @@
-import { createContext, use, useState, type ReactNode } from "react";
+import { createContext, use, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createWritingStore, type WritingStore } from "./writing.logic";
 import { useWritingAssistant } from "./useWritingAssistant";
 import type { WritingAssistant } from "./WritingWorkspace";
+import { useWritingFiles, type WritingFolderActions } from "./useWritingFiles";
 
-const Session = createContext<{ store: WritingStore; assistant: WritingAssistant } | null>(null);
+const Session = createContext<{
+  store: WritingStore;
+  assistant: WritingAssistant;
+  folders: WritingFolderActions;
+} | null>(null);
 
 export function WritingSessionProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() =>
@@ -12,8 +17,16 @@ export function WritingSessionProvider({ children }: { children: ReactNode }) {
       setItem: (key, value) => window.localStorage.setItem(key, value),
     }),
   );
-  const assistant = useWritingAssistant();
-  return <Session value={{ store, assistant }}>{children}</Session>;
+  const folder = useSyncExternalStore(store.subscribe, () => {
+    const { workspace } = store.getSnapshot();
+    const projectId = workspace.documents.find(
+      (item) => item.id === workspace.activeDocumentId,
+    )?.projectId;
+    return workspace.projects.find((item) => item.id === projectId)?.folder ?? null;
+  });
+  const assistant = useWritingAssistant(folder);
+  const folders = useWritingFiles(store);
+  return <Session value={{ store, assistant, folders }}>{children}</Session>;
 }
 
 export function useWritingSession() {

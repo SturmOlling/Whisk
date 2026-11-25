@@ -517,6 +517,8 @@ export const ProjectWriteFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: Schema.NonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
   contents: Schema.String,
+  /** Guarded save: null creates only when missing; a string must match the current file. */
+  expectedContents: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type ProjectWriteFileInput = typeof ProjectWriteFileInput.Type;
 

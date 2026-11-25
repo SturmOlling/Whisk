@@ -4,6 +4,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
+  type MessageId,
   type ModelSelection,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -24,10 +25,13 @@ import { newMessageId, newThreadId } from "../lib/utils";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   applyWritingAssistance,
+  applyHighlightReply,
   parseWritingAssistance,
   writingAssistantPrompt,
   type WritingDocument,
+  type WritingFolder,
   type WritingStore,
+  type WritingPurpose,
 } from "./writing.logic";
 import type { WritingAssistant } from "./WritingWorkspace";
 
@@ -36,24 +40,31 @@ const nowIso = () => new Date().toISOString();
 interface Request {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+  readonly messageId: MessageId;
   readonly documentId: string;
   readonly original: WritingDocument;
-  readonly purpose: "outline" | "design";
+  readonly purpose: WritingPurpose;
   readonly store: WritingStore;
 }
 
-export function useWritingAssistant(): WritingAssistant {
+const UNUSABLE_RESPONSE =
+  "The assistant did not return a usable response. Your draft and previous suggestions are unchanged. Open its thread to inspect the response or try again.";
+
+export function useWritingAssistant(folder: WritingFolder | null | undefined): WritingAssistant {
   const primaryId = usePrimaryEnvironmentId();
   const { environments } = useEnvironments();
   const providersByEnvironment = useEnvironmentProviders();
   const settings = useAtomValue(primaryServerSettingsAtom);
   const { scratchEnvironmentId, scratchWorkspaceRootFor, openScratchProject } = useScratchProject();
-  const environmentId = primaryId ?? scratchEnvironmentId(null);
+  const environmentId = folder?.environmentId ?? primaryId ?? scratchEnvironmentId(null);
   const projects = useProjects().filter(
     (project) => project.environmentId === environmentId && project.archivedAt == null,
   );
   const [projectChoice, setProjectChoice] = useState("");
-  const workspaceProject = projects.find((project) => project.id === projectChoice) ?? projects[0];
+  const workspaceProject =
+    projects.find((project) => project.id === projectChoice) ??
+    projects.find((project) => project.id === folder?.projectId) ??
+    projects[0];
   const hasWorkspace =
     workspaceProject !== undefined || scratchWorkspaceRootFor(environmentId) !== null;
   const canOperate = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
@@ -105,16 +116,16 @@ export function useWritingAssistant(): WritingAssistant {
 
   const receive = useEffectEvent((state: typeof detail, activeRequest: Request | null) => {
     if (!activeRequest || consumed.current === activeRequest.threadId) return;
-    if (Option.isSome(state.error)) {
+    if (Option.isSome(state.error) || state.status === "deleted") {
       consumed.current = activeRequest.threadId;
-      setError(state.error.value);
+      setError(Option.getOrElse(state.error, () => "The writing assistant thread is unavailable."));
       setBusy(false);
       inFlight.current = false;
       return;
     }
     if (Option.isNone(state.data)) return;
     const projection = state.data.value;
-    const run = projection.runs.at(-1);
+    const run = projection.runs.findLast((item) => item.userMessageId === activeRequest.messageId);
     if (!run || ["preparing", "queued", "starting", "running", "waiting"].includes(run.status))
       return;
     consumed.current = activeRequest.threadId;
@@ -134,13 +145,23 @@ export function useWritingAssistant(): WritingAssistant {
       )
       .at(-1);
     if (!reply) {
-      setError(
-        "The assistant finished without an outline. Open its thread to inspect the response.",
-      );
+      setError("The assistant finished without a response. Open its thread to inspect the result.");
       return;
     }
     try {
+      if (typeof activeRequest.purpose === "object") {
+        const { annotationId } = activeRequest.purpose;
+        activeRequest.store.updateDocument(activeRequest.documentId, (document) =>
+          applyHighlightReply(document, activeRequest.original, annotationId, reply.text),
+        );
+        setError(null);
+        return;
+      }
       const output = parseWritingAssistance(reply.text);
+      if (activeRequest.purpose === "design" && !output.design) {
+        setError(UNUSABLE_RESPONSE);
+        return;
+      }
       activeRequest.store.updateDocument(activeRequest.documentId, (document) =>
         applyWritingAssistance(
           document,
@@ -153,9 +174,7 @@ export function useWritingAssistant(): WritingAssistant {
       );
       setError(null);
     } catch {
-      setError(
-        "The assistant did not return a usable outline. Your draft and previous suggestions are unchanged. Open its thread to inspect the response or try again.",
-      );
+      setError(UNUSABLE_RESPONSE);
     }
   });
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- consumes updates from the external agent thread
@@ -167,7 +186,7 @@ export function useWritingAssistant(): WritingAssistant {
   const generate = async (
     document: WritingDocument,
     store: WritingStore,
-    purpose: "outline" | "design" = "outline",
+    purpose: WritingPurpose = "outline",
   ) => {
     if (inFlight.current || !selected || environmentId === null || !canOperate) return;
     inFlight.current = true;
@@ -190,18 +209,18 @@ export function useWritingAssistant(): WritingAssistant {
       const nextRequest = {
         environmentId,
         threadId,
+        messageId: newMessageId(),
         documentId: document.id,
         original: document,
         purpose,
         store,
       };
-      setRequest(nextRequest);
       const result = await startTurn({
         environmentId,
         input: {
           threadId,
           message: {
-            messageId: newMessageId(),
+            messageId: nextRequest.messageId,
             role: "user",
             text: writingAssistantPrompt(document, purpose),
             attachments: [],
@@ -233,7 +252,7 @@ export function useWritingAssistant(): WritingAssistant {
         setError(cause instanceof Error ? cause.message : "Could not start the writing assistant.");
         setBusy(false);
         inFlight.current = false;
-      }
+      } else setRequest(nextRequest);
     } catch (cause) {
       if (token !== generation.current) return;
       setError(cause instanceof Error ? cause.message : "Could not start the writing assistant.");
@@ -262,11 +281,15 @@ export function useWritingAssistant(): WritingAssistant {
     available: selected !== undefined && environmentId !== null && canOperate && hasWorkspace,
     label: waiting
       ? "The assistant needs your attention. Open its thread to continue."
-      : !hasWorkspace
-        ? "Add a workspace in Agent workspace to enable writing assistance."
-        : selected
-          ? `Writing assistant · ${selected.label}`
-          : "Connect an agent to get outlines and optional questions.",
+      : environmentId === null
+        ? "Connect an environment to use writing assistance."
+        : !canOperate
+          ? "This environment connection does not currently allow agent requests."
+          : !hasWorkspace
+            ? "Add a workspace in Agent workspace to enable writing assistance."
+            : selected
+              ? `Writing assistant · ${selected.label}`
+              : "Connect an agent to get outlines and optional questions.",
     error,
     thread: request ? scopeThreadRef(request.environmentId, request.threadId) : null,
     generate: (document, store, purpose) => {

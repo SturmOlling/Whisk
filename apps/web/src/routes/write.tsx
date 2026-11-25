@@ -3,8 +3,8 @@ import { WritingWorkspace } from "../writing/WritingWorkspace";
 import { useWritingSession } from "../writing/WritingSession";
 
 function WriteRoute() {
-  const { assistant, store } = useWritingSession();
-  return <WritingWorkspace assistant={assistant} store={store} />;
+  const { assistant, store, folders } = useWritingSession();
+  return <WritingWorkspace assistant={assistant} store={store} folders={folders} />;
 }
 
 export const Route = createFileRoute("/write")({

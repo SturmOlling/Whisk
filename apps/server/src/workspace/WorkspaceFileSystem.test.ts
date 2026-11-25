@@ -600,6 +600,70 @@ it.layer(layerTest, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
   });
 
   describe("writeFile", () => {
+    it.effect(
+      "guards file saves against stale contents and creates without overwriting existing files",
+      () =>
+        Effect.gen(function* () {
+          const files = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const cwd = yield* makeTempDir;
+          yield* files.writeFile({
+            cwd,
+            relativePath: "draft.md",
+            contents: "Original",
+            expectedContents: null,
+          });
+          const conflict = yield* files
+            .writeFile({ cwd, relativePath: "draft.md", contents: "Wrong", expectedContents: null })
+            .pipe(Effect.exit);
+          expect(conflict._tag).toBe("Failure");
+          const stale = yield* files
+            .writeFile({
+              cwd,
+              relativePath: "draft.md",
+              contents: "Wrong",
+              expectedContents: "Old version",
+            })
+            .pipe(Effect.exit);
+          expect(stale._tag).toBe("Failure");
+          expect(yield* fs.readFileString(path.join(cwd, "draft.md"))).toBe("Original");
+          yield* files.writeFile({
+            cwd,
+            relativePath: "draft.md",
+            contents: "Saved",
+            expectedContents: "Original",
+          });
+          expect(yield* fs.readFileString(path.join(cwd, "draft.md"))).toBe("Saved");
+          expect(
+            (yield* fs.readDirectory(cwd)).some((entry) => entry.startsWith(".whisk-save-")),
+          ).toBe(false);
+        }),
+    );
+
+    it.effect("serializes guarded saves from competing clients", () =>
+      Effect.gen(function* () {
+        const files = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "draft.md", "Original");
+        const results = yield* Effect.forEach(
+          ["First client", "Second client"],
+          (contents) =>
+            files
+              .writeFile({ cwd, relativePath: "draft.md", contents, expectedContents: "Original" })
+              .pipe(Effect.exit),
+          { concurrency: "unbounded" },
+        );
+        expect(results.filter((result) => result._tag === "Success")).toHaveLength(1);
+        expect(results.filter((result) => result._tag === "Failure")).toHaveLength(1);
+        expect(["First client", "Second client"]).toContain(
+          yield* fs.readFileString(path.join(cwd, "draft.md")),
+        );
+      }),
+    );
+
     it.effect("rejects writes outside a known workspace", () =>
       Effect.gen(function* () {
         const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;

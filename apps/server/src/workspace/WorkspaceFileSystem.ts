@@ -1,6 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
+import * as NodeCrypto from "node:crypto";
 
 import type {
   FilesystemEntryMetadata,
@@ -21,6 +22,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 import { makeIsServerInternalPath } from "../auth/serverInternalPaths.ts";
 import * as KnownWorkspaces from "./KnownWorkspaces.ts";
@@ -165,6 +167,7 @@ export const make = Effect.gen(function* () {
   const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
   const isServerInternalPath = yield* makeIsServerInternalPath;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const writeLock = yield* Semaphore.make(1);
 
   const toHostPath = (requestedPath: string) =>
     toWslDrivePath(requestedPath).pipe(
@@ -584,7 +587,7 @@ export const make = Effect.gen(function* () {
     return { relativePath: target.relativePath, realTargetPath };
   });
 
-  const writeFile: WorkspaceFileSystem["Service"]["writeFile"] = Effect.fn(
+  const writeFileUnlocked: WorkspaceFileSystem["Service"]["writeFile"] = Effect.fn(
     "WorkspaceFileSystem.writeFile",
   )(function* (input) {
     yield* knownWorkspaces.assertContains(input.cwd);
@@ -615,14 +618,51 @@ export const make = Effect.gen(function* () {
     );
     yield* Effect.tryPromise({
       // A symlink swapped in after the check is not followed. Windows lacks O_NOFOLLOW.
-      try: () =>
-        NodeFSP.writeFile(realTargetPath, contents, {
+      try: async () => {
+        if (input.expectedContents !== undefined) {
+          const current = await NodeFSP.readFile(realTargetPath, {
+            encoding: "utf8",
+            flag:
+              NodeFS.constants.O_RDONLY |
+              (NodeFS.constants.O_NOFOLLOW ?? 0) |
+              (NodeFS.constants.O_NONBLOCK ?? 0),
+          }).catch((error: unknown) => {
+            if (
+              typeof error === "object" &&
+              error !== null &&
+              "code" in error &&
+              error.code === "ENOENT"
+            )
+              return null;
+            throw error;
+          });
+          if ((current?.replace(/^\uFEFF/, "") ?? null) !== input.expectedContents)
+            throw new Error("The file changed since it was opened. Reload before saving.");
+          const temporaryPath = path.join(
+            path.dirname(realTargetPath),
+            `.whisk-save-${NodeCrypto.randomUUID()}.tmp`,
+          );
+          const mode = await NodeFSP.stat(realTargetPath).then(
+            (stat) => stat.mode & 0o777,
+            () => 0o600,
+          );
+          try {
+            await NodeFSP.writeFile(temporaryPath, contents, { flag: "wx", mode });
+            if (input.expectedContents === null) await NodeFSP.link(temporaryPath, realTargetPath);
+            else await NodeFSP.rename(temporaryPath, realTargetPath);
+          } finally {
+            await NodeFSP.unlink(temporaryPath).catch(() => {});
+          }
+          return;
+        }
+        await NodeFSP.writeFile(realTargetPath, contents, {
           flag:
             NodeFS.constants.O_WRONLY |
             NodeFS.constants.O_CREAT |
             NodeFS.constants.O_TRUNC |
             (NodeFS.constants.O_NOFOLLOW ?? 0),
-        }),
+        });
+      },
       catch: (cause) =>
         new WorkspaceFileSystemOperationError({
           workspaceRoot: input.cwd,
@@ -641,6 +681,9 @@ export const make = Effect.gen(function* () {
     }
     return { relativePath: target.relativePath };
   });
+
+  const writeFile: WorkspaceFileSystem["Service"]["writeFile"] = (input) =>
+    writeLock.withPermit(writeFileUnlocked(input));
 
   return WorkspaceFileSystem.of({ getMetadata, readFile, writeFile });
 });

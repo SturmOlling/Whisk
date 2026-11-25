@@ -2,10 +2,17 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   assistanceSource,
   applyWritingAssistance,
+  applyHighlightReply,
   createWritingStore,
   decodeWritingWorkspace,
   newWritingDocument,
   newWritingWorkspace,
+  newWritingAnnotation,
+  findWritingAnchor,
+  saveWritingAnnotation,
+  writingAssistantPrompt,
+  isHighlightReplyStale,
+  plainWritingBlocks,
   parseWritingAssistance,
   WRITING_STORAGE_KEY,
 } from "./writing.logic";
@@ -21,6 +28,44 @@ function memoryStorage(initial?: string) {
 }
 
 describe("writing persistence", () => {
+  it("migrates old outline-view drafts and backups without losing writing or context", () => {
+    const state = newWritingWorkspace();
+    const legacy = {
+      ...state,
+      view: "outline",
+      includeOutline: false,
+      documents: state.documents.map(
+        ({
+          annotations: _annotations,
+          todos: _todos,
+          blocks: _blocks,
+          fileName: _fileName,
+          ...document
+        }) => ({
+          ...document,
+          text: "An existing draft.",
+          context: "An existing intention.",
+        }),
+      ),
+    };
+    const storage = memoryStorage(JSON.stringify(legacy));
+    const store = createWritingStore(storage);
+    const restored = store.getSnapshot().workspace;
+    expect(store.getSnapshot().error).toBeNull();
+    expect(restored.view).toBe("sparse");
+    expect(restored.includeOutline).toBe(true);
+    expect(restored.documents[0]).toMatchObject({
+      text: "An existing draft.",
+      context: "An existing intention.",
+      annotations: [],
+      todos: [],
+    });
+    store.update((current) => ({ ...current, view: "review" }));
+    expect(createWritingStore(storage).getSnapshot().workspace.documents).toEqual(
+      restored.documents,
+    );
+  });
+
   it("restores each document and attributes a late suggestion to its original document", () => {
     const storage = memoryStorage();
     const store = createWritingStore(storage);
@@ -125,6 +170,141 @@ describe("writing persistence", () => {
   });
 });
 
+describe("writing highlights", () => {
+  it("keeps quote anchors attached after edits and retains missing passages and linked todos", () => {
+    let document = {
+      ...newWritingDocument("project"),
+      text: "First repeated phrase. Second repeated phrase.",
+    };
+    const start = document.text.lastIndexOf("repeated phrase");
+    const annotation = newWritingAnnotation(
+      document.text,
+      start,
+      start + "repeated phrase".length,
+      "unclear",
+      "Clarify the second claim.",
+      "todo",
+    );
+    document = saveWritingAnnotation(document, annotation);
+    expect(document.todos[0]).toMatchObject({
+      text: "Clarify the second claim.",
+      annotationId: annotation.id,
+      done: false,
+    });
+    expect(findWritingAnchor(`A new introduction. ${document.text}`, annotation)).toBe(
+      start + "A new introduction. ".length,
+    );
+    expect(findWritingAnchor("Both passages were rewritten.", annotation)).toBeNull();
+    document = saveWritingAnnotation(document, {
+      ...annotation,
+      note: "Check the source.",
+      resolved: true,
+    });
+    expect(document.todos).toHaveLength(1);
+    expect(document.todos[0]).toMatchObject({ text: "Check the source.", done: true });
+    const state = newWritingWorkspace();
+    const draft = {
+      ...document,
+      projectId: state.projects[0]!.id,
+      text: "Both passages were rewritten.",
+      blocks: plainWritingBlocks("Both passages were rewritten."),
+    };
+    const restored = decodeWritingWorkspace(
+      JSON.stringify({ ...state, documents: [draft], activeDocumentId: draft.id }),
+    );
+    expect(restored.documents[0]!.annotations[0]!.quote).toBe("repeated phrase");
+    expect(restored.documents[0]!.todos[0]!.annotationId).toBe(annotation.id);
+    for (const invalid of [
+      { ...draft, annotations: [annotation, annotation] },
+      { ...draft, todos: [{ ...draft.todos[0]!, annotationId: "missing" }] },
+    ])
+      expect(() =>
+        decodeWritingWorkspace(
+          JSON.stringify({ ...state, documents: [invalid], activeDocumentId: draft.id }),
+        ),
+      ).toThrow();
+  });
+
+  it("sends only the chosen highlight's instruction and stores late replies without rewriting or resurrecting a deleted mark", () => {
+    const document = { ...newWritingDocument("project"), text: "A draft to improve." };
+    const selected = newWritingAnnotation(
+      document.text,
+      0,
+      7,
+      "comment",
+      "Give me a stronger opening.",
+      "agent",
+    );
+    const privateNote = newWritingAnnotation(
+      document.text,
+      8,
+      10,
+      "good",
+      "SECRET PRIVATE NOTE",
+      "note",
+    );
+    const original = saveWritingAnnotation(saveWritingAnnotation(document, selected), privateNote);
+    const prompt = writingAssistantPrompt(original, {
+      kind: "highlight",
+      annotationId: selected.id,
+    });
+    expect(prompt).toContain("Give me a stronger opening.");
+    expect(prompt).not.toContain("SECRET PRIVATE NOTE");
+    expect(writingAssistantPrompt(original, "outline")).not.toContain("SECRET PRIVATE NOTE");
+    const current = {
+      ...original,
+      text: "A newer draft.",
+      annotations: original.annotations.map((item) =>
+        item.id === selected.id ? { ...item, note: "A newer thought." } : item,
+      ),
+    };
+    const result = applyHighlightReply(
+      current,
+      original,
+      selected.id,
+      '{"reply":"Try a concrete scene."}',
+    );
+    expect(result.text).toBe("A newer draft.");
+    expect(result.annotations[0]).toMatchObject({
+      note: "A newer thought.",
+      resolved: false,
+      reply: { text: "Try a concrete scene.", source: expect.any(String) },
+    });
+    expect(isHighlightReplyStale(result, result.annotations[0]!)).toBe(true);
+    const fresh = applyHighlightReply(
+      original,
+      original,
+      selected.id,
+      '{"reply":"A fresh response."}',
+    );
+    expect(isHighlightReplyStale(fresh, fresh.annotations[0]!)).toBe(false);
+    expect(
+      isHighlightReplyStale({ ...fresh, context: "A new intention." }, fresh.annotations[0]!),
+    ).toBe(true);
+    const deleted = { ...current, annotations: [] };
+    expect(
+      applyHighlightReply(deleted, original, selected.id, '{"reply":"Late response."}').annotations,
+    ).toEqual([]);
+    for (const raw of [
+      '{"reply":""}',
+      '{"reply":"  "}',
+      '{"outline":[]}',
+      JSON.stringify({ reply: "x".repeat(20_001) }),
+    ])
+      expect(() => applyHighlightReply(current, original, selected.id, raw)).toThrow();
+    for (const [start, end] of [
+      [0, 0],
+      [-1, 2],
+      [1, 999],
+      [NaN, 2],
+      [0.5, 2],
+    ])
+      expect(() =>
+        newWritingAnnotation(document.text, start!, end!, "comment", "", "note"),
+      ).toThrow();
+  });
+});
+
 it("validates model output, deduplicates passages/questions, and rejects oversized or malformed suggestions", () => {
   const output = {
     outline: [
@@ -159,6 +339,7 @@ it("applies generated design without replacing newer writing or design direction
   const edited = { ...original, text: "Written while the assistant was thinking." };
   const late = applyWritingAssistance(edited, original, output, "2026-11-17T00:00:00.000Z");
   expect(late.text).toBe(edited.text);
+  expect(late.design).toEqual(edited.design);
   expect(late.assistance!.source).not.toBe(assistanceSource(late));
   const redirected = {
     ...edited,
@@ -172,4 +353,24 @@ it("applies generated design without replacing newer writing or design direction
   );
   expect(unchanged.design).toEqual(redirected.design);
   expect(unchanged.assistance!.source).not.toBe(assistanceSource(unchanged));
+});
+
+it("asks for design based on the current draft, context, answers, and audience", () => {
+  const blank = newWritingDocument("project");
+  const document = {
+    ...blank,
+    text: "Dear readers,",
+    context: "Invite neighbors to a meeting.",
+    answers: { "Who should attend?": "Anyone on the street." },
+    design: { ...blank.design, audience: "Neighbors", instructions: "A personal letter." },
+  };
+  const prompt = writingAssistantPrompt(document, "design");
+  expect(prompt).toContain('"design":{"layout":"editorial","font":"serif","accent":"#486556"}');
+  const source = JSON.parse(prompt.split("\n\n").at(-1)!);
+  expect(source).toMatchObject({
+    writing: document.text,
+    intent: document.context,
+    answers: document.answers,
+    design: document.design,
+  });
 });
